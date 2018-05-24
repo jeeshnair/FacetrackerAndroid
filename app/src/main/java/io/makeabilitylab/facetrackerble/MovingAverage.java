@@ -3,6 +3,10 @@ package io.makeabilitylab.facetrackerble;
 import java.util.LinkedList;
 import java.util.Queue;
 
+/*
+Simple class to calculate moving average.
+*/
+
 public class MovingAverage {
     public Queue<Integer> window = new LinkedList<Integer>();
     public int p;

@@ -57,8 +57,6 @@ import io.makeabilitylab.facetrackerble.camera.GraphicOverlay;
  *   - The Googly Eyes demo: https://github.com/googlesamples/android-vision/tree/master/visionSamples/googly-eyes
  *   - The CSE590 BLE demo: https://github.com/jonfroehlich/CSE590Sp2018/tree/master/A03-BLEAdvanced
  *
- * Jon TODO:
- *  1. (Low priority) We shouldn't disconnect from BLE just because our orientation changed (e.g., from Portrait to Landscape). How to deal?
  */
 public class MainActivity extends AppCompatActivity implements BLEListener{
 
@@ -84,9 +82,6 @@ public class MainActivity extends AppCompatActivity implements BLEListener{
     // Bluetooth stuff
     private BLEDevice mBLEDevice;
 
-    // TODO: Define your device name and the length of the name. For your assignment, do not use the
-    // default name or you will not be able to discriminate your board from everyone else's board.
-    // Note the device name and the length should be consistent with the ones defined in the Duo sketch
     private final String TARGET_BLE_DEVICE_NAME = "JEESHMN";
 
     private static int MOVING_AVERAGE_WINDOW = 15;
@@ -204,11 +199,18 @@ public class MainActivity extends AppCompatActivity implements BLEListener{
             return;
         }
 
+        // Handle speech activity . Following commands are supported
+        // 1)Sweep <Angle>.
+        // 2)Center sweeps to 90%
+        // 3)Emergency to trigger emergency.
+        // 4)Cancel to come out of emergency mode.
         if (requestCode == SPEECH_REQUEST_CODE && resultCode == RESULT_OK) {
             int serviceAngleNumeric = 0;
             List<String> results = data.getStringArrayListExtra(
                     RecognizerIntent.EXTRA_RESULTS);
             String spokenText = results.get(0);
+
+            // set the command.
             txtCommand.setText(spokenText);
 
             if (spokenText!=null && spokenText.startsWith("sweep") ) {
@@ -507,19 +509,6 @@ public class MainActivity extends AppCompatActivity implements BLEListener{
             mFaceGraphic.updateFace(face);
 
 
-            // CSE590 Student TODO:
-            // Once a face is detected, you get lots of information about the face for free, including
-            // a smiling probability score, eye shut probability, and the location of the face in the
-            // camera image (note that we are using a small camera size to speedup processing:
-            //   The dimensions are: CAMERA_PREVIEW_WIDTH x CAMERA_PREVIEW_HEIGHT
-            //
-            // You need to translate the location of the face into data that will be useful for your servo.
-            // For example, this code would translate the X location of the face into a range from 0-255:
-            //    (centerOfFace.x / CAMERA_PREVIEW_WIDTH) * 255
-            // Since the servo motor can move in only one dimension, you only need to track one dimension of movement
-            //
-            // To properly calculate the location of the face, you may need to handle front facing vs. rear facing camera
-            // and portrait vs. landscape phone modes properly.
             //
             // You can also turn on Landmark detection to get more information about the face like cheek, ear, mouth, etc.
             //   See: https://developers.google.com/android/reference/com/google/android/gms/vision/face/Landmark
@@ -540,23 +529,19 @@ public class MainActivity extends AppCompatActivity implements BLEListener{
 
             Log.i(TAG, debugFaceInfo);
 
-            // Come up with your own communication protocol to Arduino. Make sure that you change the
-            // RECEIVE_MAX_LEN in your Arduino code to match the # of bytes you are sending.
-            // For example, one protocol might be:
-            // 0 : Control byte
-            // 1 : left eye open probability (0-255 where 0 is eye closed and 1 is eye open)
-            // 2 : right eye open probability (0-255 where 0 is eye closed and 1 is eye open)
-            // 3 : happiness probability (0-255 where 0 sad, 128 is neutral, and 255 is happy)
-            // 4 : x-location of face (0-255 where 0 is left side of camera and 255 is right side of camera)
             byte[] buf = new byte[] { (byte) 0x01, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,(byte) 0x00}; // 5-byte initialization
 
             // Casting location to int to simplify the byte conversion.
             averageFilter.newNum((int)face.getPosition().x);
+
+            // Get the smoothened location value .
             int smoothValue = averageFilter.getAvg();
 
             screenInfo = String.format("Smooth Location %d",smoothValue);
             Log.i(TAG, screenInfo);
 
+            // Transmit the following to Arduino over blue tooth
+            // a)Location bytes b)Portrait vs landscape c)Face width d)Front facing vs rear facing.
             byte[] locationBytes = ByteBuffer.allocate(4).putInt(smoothValue).array();
             buf[1] = locationBytes[2];
             buf[2] = locationBytes[3];
@@ -650,10 +635,8 @@ public class MainActivity extends AppCompatActivity implements BLEListener{
 
     @Override
     public void onBleDataReceived(byte[] data) {
-        // CSE590 Student TODO
-        // Write code here that receives the ultrasonic measurements from Arduino
-        // and outputs them in your app. (You could also consider receiving the angle
-        // of the servo motor but this would be more for debugging and is not necessary)
+        // Receive the data from Bluetooh and print the distance from Arduino.
+        // Deal with 2 bytes.
         if (data[0] == 0x0B) {
             int distanceInCms = ((data[1] & 0xFF) << 8 | (data[2] & 0xFF));
             if(distanceInCms>=0) {
